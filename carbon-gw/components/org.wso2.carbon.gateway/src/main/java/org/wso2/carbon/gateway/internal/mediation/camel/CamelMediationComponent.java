@@ -58,7 +58,7 @@ public class CamelMediationComponent extends DefaultComponent implements RestCon
 
     public Consumer createConsumer(CamelContext camelContext, Processor processor,
                                    String verb, String basePath, String uriTemplate,
-                                   String consumes, String produces, Map<String,
+                                   String consumes, String produces, RestConfiguration restConfiguration, Map<String,
             Object> parameters) throws Exception {
         String scheme = "http";
 
@@ -108,4 +108,11 @@ public class CamelMediationComponent extends DefaultComponent implements RestCon
     public ConnectionManager getConnectionManager() {
         return connectionManager;
     }
+
+//    @Override
+//    public Consumer createConsumer(CamelContext camelContext, Processor processor, String s, String s1, String s2,
+//                                   String s3, String s4, RestConfiguration restConfiguration,
+//                                   Map<String, Object> map) throws Exception {
+//        return null;
+//    }
 }

@@ -107,6 +107,8 @@ public class CamelMediationProducer extends DefaultAsyncProducer {
                 Map<String, Object> transportHeaders =
                         (Map<String, Object>) responseCmsg.getProperty(Constants.TRANSPORT_HEADERS);
                 if (transportHeaders != null) {
+                    transportHeaders.put(Exchange.HTTP_RESPONSE_CODE,
+                            responseCmsg.getProperty(Constants.HTTP_STATUS_CODE));
                     CarbonMessage request = exchange.getIn().getBody(CarbonMessage.class);
                     responseCmsg.setProperty(Constants.SRC_HNDLR, request.getProperty(Constants.SRC_HNDLR));
                     responseCmsg.setProperty(Constants.DISRUPTOR, request.getProperty(Constants.DISRUPTOR));

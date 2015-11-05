@@ -28,7 +28,7 @@ classpath:org/wso2/carbon/gateway/xml/camel-spring.xsd">
 
     <camelContext id="wso2-cc" xmlns="http://camel.apache.org/schema/spring">
 
-        <restConfiguration bindingMode="auto" component="wso2-gw" scheme="http" port="9090"/>
+        <restConfiguration bindingMode="off" component="wso2-gw" scheme="http" port="9090"/>
 
         <!--sample rest interfaces -->
         <rest path="/gw">
@@ -38,6 +38,27 @@ classpath:org/wso2/carbon/gateway/xml/camel-spring.xsd">
             <get uri="/news/{id}">
                 <to uri="direct:getNewsById"/>
             </get>
+        </rest>
+
+        <rest path="/testssl">
+            <get uri="/geturi">
+                <to uri="direct:httsAPI"/>
+            </get>
+        </rest>
+
+        <rest path="/pizza">
+            <get uri="/order">
+                <to uri="direct:listPizzaOrders"/>
+            </get>
+            <get uri="/order/{id}">
+                <to uri="direct:listPizzaOrder"/>
+            </get>
+            <post uri="/order/new">
+                <to uri="direct:addPizzaOrder"/>
+            </post>
+            <delete uri="/delete/{id}">
+                <to uri="direct:deletePizzaOrder"/>
+            </delete>
         </rest>
 
         <!-- sample routes corresponding to the rest interfaces -->
@@ -62,12 +83,42 @@ classpath:org/wso2/carbon/gateway/xml/camel-spring.xsd">
                 </when>
                 <when>
                     <simple>${header.routeId} regex 'r2'</simple>
-                    <to uri="wso2-gw:http://localhost:9002/service/SimpleStockQuoteService"/>
+                    <to uri="wso2-gw:http://localhost:9004/service/SimpleStockQuoteService"/>
                 </when>
                 <otherwise>
-                    <to uri="wso2-gw:http://localhost:9004/SimpleStockQuoteService"/>
+                    <to uri="wso2-gw:http://localhost:9006/SimpleStockQuoteService"/>
                 </otherwise>
             </choice>
+        </route>
+
+        <route>
+            <from uri="direct:listPizzaOrders"/>
+            <to uri="wso2-gw:http://localhost:8080/restful-pizzashop/rest/menu/order"/>
+        </route>
+        <route>
+            <from uri="direct:listPizzaOrder"/>
+            <recipientList>
+                <simple>wso2-gw:http://localhost:8080/restful-pizzashop/rest/menu/order/${header.id}</simple>
+            </recipientList>
+        </route>
+        <route>
+            <from uri="direct:addPizzaOrder"/>
+            <to uri="wso2-gw:http://localhost:8080/restful-pizzashop/rest/menu/add"/>
+        </route>
+        <route>
+            <from uri="direct:deletePizzaOrder"/>
+            <recipientList>
+                <simple>wso2-gw:http://localhost:8080/restful-pizzashop/rest/menu/delete/${header.id}</simple>
+            </recipientList>
+        </route>
+
+        <route id="failover">
+            <from uri="wso2-gw:/failover"/>
+            <loadBalance>
+                <failover roundRobin="true"/>
+                <to uri="wso2-gw:http://localhost:9000/services/SimpleStockQuoteService"/>
+                <to uri="wso2-gw:http://localhost:9001/services/SimpleStockQuoteService"/>
+            </loadBalance>
         </route>
 
     </camelContext>
