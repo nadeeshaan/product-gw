@@ -24,6 +24,7 @@ import io.netty.handler.codec.http.DefaultLastHttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import org.apache.camel.Exchange;
 import org.apache.camel.ExchangePattern;
+import org.apache.camel.Message;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.wso2.carbon.gateway.internal.common.CarbonCallback;
@@ -101,10 +102,16 @@ public class CamelMediationEngine implements CarbonMessageProcessor {
 
         consumer.getAsyncProcessor().process(exchange, done -> {
 
-            CarbonMessage mediatedResponse = exchange.getOut().getBody(CarbonMessage.class);
+            Message exchangeMessage = null;
+            if (exchange.getOut().getBody() != null) {
+                exchangeMessage = exchange.getOut();
+            } else { //either in or out of the exchange should contain message
+                exchangeMessage = exchange.getIn();
+            }
+            CarbonMessage mediatedResponse = exchangeMessage.getBody(CarbonMessage.class);
 
             if (mediatedResponse != null && !exchange.getIn().getMessageId().equals(exchange.getOut().getMessageId())) {
-                Map<String, Object> mediatedHeaders = exchange.getOut().getHeaders();
+                Map<String, Object> mediatedHeaders = exchangeMessage.getHeaders();
                 mediatedResponse.setProperty(Constants.TRANSPORT_HEADERS, mediatedHeaders);
             } else {
                 mediatedResponse = new CarbonMessage(Constants.PROTOCOL_NAME);

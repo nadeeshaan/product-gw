@@ -97,9 +97,7 @@ classpath:org/wso2/carbon/gateway/xml/camel-spring.xsd">
         </route>
         <route>
             <from uri="direct:listPizzaOrder"/>
-            <recipientList>
-                <simple>wso2-gw:http://localhost:8080/restful-pizzashop/rest/menu/order/${header.id}</simple>
-            </recipientList>
+            <toD uri="wso2-gw:http://localhost:8080/restful-pizzashop/rest/menu/order/${header.id}"/>
         </route>
         <route>
             <from uri="direct:addPizzaOrder"/>

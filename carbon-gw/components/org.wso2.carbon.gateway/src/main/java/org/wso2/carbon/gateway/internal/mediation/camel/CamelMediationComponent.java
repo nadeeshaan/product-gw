@@ -67,15 +67,14 @@ public class CamelMediationComponent extends DefaultComponent implements RestCon
         int port = 0;
 
         // if no explicit port/host configured, then use port from rest configuration
-        RestConfiguration config = getCamelContext().getRestConfiguration();
-        if (config.getComponent() == null || config.getComponent().equals("wso2-gw")) {
-            if (config.getScheme() != null) {
-                scheme = config.getScheme();
+        if (restConfiguration.getComponent() == null || restConfiguration.getComponent().equals("wso2-gw")) {
+            if (restConfiguration.getScheme() != null) {
+                scheme = restConfiguration.getScheme();
             }
-            if (config.getHost() != null) {
-                host = config.getHost();
+            if (restConfiguration.getHost() != null) {
+                host = restConfiguration.getHost();
             }
-            int num = config.getPort();
+            int num = restConfiguration.getPort();
             if (num > 0) {
                 port = num;
             }
@@ -109,10 +108,4 @@ public class CamelMediationComponent extends DefaultComponent implements RestCon
         return connectionManager;
     }
 
-//    @Override
-//    public Consumer createConsumer(CamelContext camelContext, Processor processor, String s, String s1, String s2,
-//                                   String s3, String s4, RestConfiguration restConfiguration,
-//                                   Map<String, Object> map) throws Exception {
-//        return null;
-//    }
 }
