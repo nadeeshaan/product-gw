@@ -19,9 +19,11 @@ import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.http.HttpRequestDecoder;
 import io.netty.handler.codec.http.HttpResponseEncoder;
+import org.apache.camel.model.RoutesDefinition;
 import org.apache.camel.spring.SpringCamelContext;
 import org.apache.log4j.Logger;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.support.AbstractApplicationContext;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
 import org.w3c.dom.Document;
 import org.wso2.carbon.gateway.internal.common.CarbonMessage;
@@ -38,7 +40,10 @@ import org.wso2.carbon.gateway.internal.transport.sender.channel.pool.PoolConfig
 import org.wso2.carbon.transport.http.netty.listener.CarbonNettyServerInitializer;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Paths;
 import java.util.Map;
 
 import javax.xml.transform.dom.DOMSource;
@@ -55,11 +60,16 @@ public class GatewayNettyInitializer implements CarbonNettyServerInitializer {
     private static final Logger log = Logger.getLogger(GatewayNettyInitializer.class);
     private int queueSize = 32544;
     private ConnectionManager connectionManager;
+    private ApplicationContext applicationContext;
+    private SpringCamelContext camelContext;
 
     public static final String CAMEL_CONTEXT_CONFIG_FILE = "repository" + File.separator + "conf" +
             File.separator +
             "camel" + File.separator
             + "camel-context.xml";
+
+    public static final  String CAMEL_CONFIGS_DIRECTORY = "repository" + File.separator + "conf" +
+            File.separator + "camel";
 
     public GatewayNettyInitializer() {
 
@@ -68,15 +78,16 @@ public class GatewayNettyInitializer implements CarbonNettyServerInitializer {
     @Override
     public void setup(Map<String, String> parameters) {
 
+        log.info("Patched..... ");
 
         BootstrapConfiguration.createBootStrapConfiguration(parameters);
         PoolConfiguration.createPoolConfiguration(parameters);
 
         SpringCamelContext.setNoStart(true);
-        ApplicationContext applicationContext = new ClassPathXmlApplicationContext(
+        applicationContext = new ClassPathXmlApplicationContext(
                 new String[]{CAMEL_CONTEXT_CONFIG_FILE});
         try {
-            SpringCamelContext camelContext = (SpringCamelContext) applicationContext.getBean("wso2-cc");
+            camelContext = (SpringCamelContext) applicationContext.getBean("wso2-cc");
             camelContext.start();
             CamelMediationComponent component = (CamelMediationComponent) camelContext.getComponent("wso2-gw");
             camelContext.getTypeConverterRegistry().addTypeConverter(Document.class, CarbonMessage.class,
@@ -120,6 +131,15 @@ public class GatewayNettyInitializer implements CarbonNettyServerInitializer {
                 DisruptorFactory.createDisruptors(DisruptorFactory.DisruptorType.INBOUND,
                         disruptorConfig, engine);
             }
+
+            // Add the routes from the custom routes config files in the repository/conf/camel directory
+            addRoutesToContext(CAMEL_CONFIGS_DIRECTORY);
+
+            // Start the watch service for the custom route file modification in the repository/conf/camel directory
+            new CamelConfigWatchAgent().startWatchingForModifications(Paths.get("repository" + File.separator
+                    + "conf" +
+                    File.separator +
+                    "camel"), this);
         } catch (Exception e) {
             String msg = "Error while loading " + CAMEL_CONTEXT_CONFIG_FILE + " configuration file";
             log.error(msg + e);
@@ -139,6 +159,78 @@ public class GatewayNettyInitializer implements CarbonNettyServerInitializer {
             p.addLast("handler", new SourceHandler(queueSize, connectionManager));
         } catch (Exception e) {
             log.error("Cannot Create SourceHandler ", e);
+        }
+    }
+
+    public void notifyConfigModification(File camelConfigFile) {
+        log.info("Camel configuration change detected. ============================");
+
+        try {
+            camelContext.stop();
+            camelContext.destroy();
+        } catch (Exception e) {
+            log.error("Redeploying CamelContext - Cannot stop existing context : " + e);
+        }
+
+        ((AbstractApplicationContext) applicationContext).close();
+
+        SpringCamelContext.setNoStart(true);
+        applicationContext = new ClassPathXmlApplicationContext(
+                new String[]{CAMEL_CONTEXT_CONFIG_FILE});
+        camelContext = (SpringCamelContext) applicationContext.getBean("wso2-cc");
+        try {
+            camelContext.start();
+        } catch (Exception e) {
+            log.error("Redeploying CamelContext - Cannot start new context : " + e);
+
+        }
+    }
+
+    public void notifyRoutesModification(File routeConfig) {
+        log.info("Route Modification from file " + routeConfig.getName() + " Detected");
+        addRoutesFromCustomConfigs(routeConfig);
+    }
+
+    public void addRoutesFromCustomConfigs(File routeConfig) {
+        log.info("Adding Custom Routes from [" + routeConfig.getName() + "]");
+
+        if (routeConfig.getPath().equals(CAMEL_CONTEXT_CONFIG_FILE)) {
+            log.warn("Skipping camel Context file [" + routeConfig.getName() + "]");
+            return;
+        }
+
+        InputStream inputStream = null;
+        try {
+            inputStream = new FileInputStream(routeConfig.getAbsolutePath());
+            RoutesDefinition routesDefinition = camelContext.loadRoutesDefinition(inputStream);
+            camelContext.addRouteDefinitions(routesDefinition.getRoutes());
+        } catch (Exception e) {
+            String msg = "Error while adding the routes from file [" + routeConfig.getName() + "] ";
+            log.error(msg + e);
+        } finally {
+            try {
+                inputStream.close();
+            } catch (IOException e) {
+                String msg = "Error while Closing the input stream";
+                log.error(msg + e);
+            }
+        }
+    }
+
+    /**
+     * Adding the routes from the files listed under the directory given by the path
+     * @param path location of the particular directory
+     */
+    public void addRoutesToContext(String path) {
+        File directory = new File(path);
+        if (!directory.isDirectory()) {
+            log.warn("Specified path is not a Directory");
+            return;
+        }
+
+        File[] files = directory.listFiles();
+        for (File file : files) {
+            addRoutesFromCustomConfigs(file);
         }
     }
 
