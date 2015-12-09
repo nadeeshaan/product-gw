@@ -40,6 +40,7 @@ public class CamelConfigWatchAgent {
     private static final Logger log = Logger.getLogger(CamelConfigWatchAgent.class);
 
     private ExecutorService pool = Executors.newFixedThreadPool(10);
+    private int eventCount = 0;
 
     public void startWatchingForModifications(Path path, GatewayNettyInitializer gatewayNettyInitializer)
             throws Exception {
@@ -69,25 +70,42 @@ public class CamelConfigWatchAgent {
                         for (WatchEvent<?> watchEvent : key.pollEvents()) {
                             kind = watchEvent.kind();
                             if (OVERFLOW == kind) {
-                                continue; //loop
+                                continue;
                             } else if (ENTRY_MODIFY == kind) {
                                 log.info("File modification detected.");
-                                @SuppressWarnings("unchecked")
-                                Path newPath = ((WatchEvent<Path>) watchEvent).context();
-                                if (!newPath.toString().startsWith(".")
-                                    &&  !newPath.toString().startsWith(".swp")) {
-                                    File modifiedFile = new File(path.toString() + File.separator + newPath.toString());
-                                    gatewayNettyInitializer.notifyRoutesModification(modifiedFile);
+                                if (eventCount > 0) {
+                                    eventCount = 0;
+                                    continue;
+                                } else {
+                                    @SuppressWarnings("unchecked")
+                                    Path newPath = ((WatchEvent<Path>) watchEvent).context();
+                                    if (!newPath.toString().startsWith(".")
+                                            &&  !newPath.toString().startsWith(".swp")) {
+                                        File modifiedFile = new File(path.toString() + File.separator +
+                                                newPath.toString());
+                                        gatewayNettyInitializer.notifyRoutesModification(modifiedFile);
+                                    }
                                 }
                             } else if (ENTRY_CREATE == kind) {
-                                log.info("New File creation Detected");
-
                                 /**
                                  * TODO: If we handle the entry create event here, same config will be added twice
                                  * This is because when creating a file, OS will create an empty file with 0bytes and
                                  * then it will modify the file with the content
                                  * Then the ENTRY_MODIFY event is triggered Need to check this behavior on other OSs
+                                 *
+                                 * Using eventCount this has been solved for the time being
                                  */
+
+                                log.info("New File creation Detected");
+                                eventCount++;
+                                @SuppressWarnings("unchecked")
+                                Path newPath = ((WatchEvent<Path>) watchEvent).context();
+                                if (!newPath.toString().startsWith(".")
+                                        &&  !newPath.toString().startsWith(".swp")) {
+                                    File modifiedFile = new File(path.toString() + File.separator +
+                                            newPath.toString());
+                                    gatewayNettyInitializer.notifyRoutesModification(modifiedFile);
+                                }
                             }
                         }
                         key.reset();
