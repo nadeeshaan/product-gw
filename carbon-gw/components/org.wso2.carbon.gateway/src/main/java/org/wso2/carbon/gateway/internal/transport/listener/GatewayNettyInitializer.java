@@ -23,7 +23,6 @@ import org.apache.camel.model.RoutesDefinition;
 import org.apache.camel.spring.SpringCamelContext;
 import org.apache.log4j.Logger;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.support.AbstractApplicationContext;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
 import org.w3c.dom.Document;
 import org.wso2.carbon.gateway.internal.common.CarbonMessage;
@@ -41,6 +40,7 @@ import org.wso2.carbon.transport.http.netty.listener.CarbonNettyServerInitialize
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Paths;
@@ -77,9 +77,6 @@ public class GatewayNettyInitializer implements CarbonNettyServerInitializer {
 
     @Override
     public void setup(Map<String, String> parameters) {
-
-        log.info("Patched..... ");
-
         BootstrapConfiguration.createBootStrapConfiguration(parameters);
         PoolConfiguration.createPoolConfiguration(parameters);
 
@@ -109,7 +106,6 @@ public class GatewayNettyInitializer implements CarbonNettyServerInitializer {
             CamelMediationEngine engine = component.getEngine();
             connectionManager = component.getConnectionManager();
 
-
             if (parameters != null) {
                 DisruptorConfig disruptorConfig =
                         new DisruptorConfig(
@@ -133,6 +129,7 @@ public class GatewayNettyInitializer implements CarbonNettyServerInitializer {
             }
 
             // Add the routes from the custom routes config files in the repository/conf/camel directory
+            log.info("Adding routes from custom routes configuration files ...");
             addRoutesToContext(CAMEL_CONFIGS_DIRECTORY);
 
             // Start the watch service for the custom route file modification in the repository/conf/camel directory
@@ -162,36 +159,11 @@ public class GatewayNettyInitializer implements CarbonNettyServerInitializer {
         }
     }
 
-    public void notifyConfigModification(File camelConfigFile) {
-        log.info("Camel configuration change detected. ============================");
-
-        try {
-            camelContext.stop();
-            camelContext.destroy();
-        } catch (Exception e) {
-            log.error("Redeploying CamelContext - Cannot stop existing context : " + e);
-        }
-
-        ((AbstractApplicationContext) applicationContext).close();
-
-        SpringCamelContext.setNoStart(true);
-        applicationContext = new ClassPathXmlApplicationContext(
-                new String[]{CAMEL_CONTEXT_CONFIG_FILE});
-        camelContext = (SpringCamelContext) applicationContext.getBean("wso2-cc");
-        try {
-            camelContext.start();
-        } catch (Exception e) {
-            log.error("Redeploying CamelContext - Cannot start new context : " + e);
-
-        }
-    }
-
-    public void notifyRoutesModification(File routeConfig) {
-        log.info("Route Modification from file " + routeConfig.getName() + " Detected");
-        addRoutesFromCustomConfigs(routeConfig);
-    }
-
-    public void addRoutesFromCustomConfigs(File routeConfig) {
+    /**
+     * Adding the routes from custom configuration files
+     * @param routeConfig custom configuration file
+     */
+    public void addRoutesFromCustomConfigs(File routeConfig) throws FileNotFoundException {
         log.info("Adding Custom Routes from [" + routeConfig.getName() + "]");
 
         if (routeConfig.getPath().equals(CAMEL_CONTEXT_CONFIG_FILE)) {
@@ -199,9 +171,8 @@ public class GatewayNettyInitializer implements CarbonNettyServerInitializer {
             return;
         }
 
-        InputStream inputStream = null;
+        InputStream inputStream = new FileInputStream(routeConfig.getAbsolutePath());
         try {
-            inputStream = new FileInputStream(routeConfig.getAbsolutePath());
             RoutesDefinition routesDefinition = camelContext.loadRoutesDefinition(inputStream);
             camelContext.addRouteDefinitions(routesDefinition.getRoutes());
         } catch (Exception e) {
@@ -221,7 +192,7 @@ public class GatewayNettyInitializer implements CarbonNettyServerInitializer {
      * Adding the routes from the files listed under the directory given by the path
      * @param path location of the particular directory
      */
-    public void addRoutesToContext(String path) {
+    private void addRoutesToContext(String path) throws FileNotFoundException {
         File directory = new File(path);
         if (!directory.isDirectory()) {
             log.warn("Specified path is not a Directory");
@@ -229,8 +200,12 @@ public class GatewayNettyInitializer implements CarbonNettyServerInitializer {
         }
 
         File[] files = directory.listFiles();
-        for (File file : files) {
-            addRoutesFromCustomConfigs(file);
+
+        // Iterate over the files in the specified directory and load routes from them
+        if (files != null) {
+            for (File file : files) {
+                addRoutesFromCustomConfigs(file);
+            }
         }
     }
 

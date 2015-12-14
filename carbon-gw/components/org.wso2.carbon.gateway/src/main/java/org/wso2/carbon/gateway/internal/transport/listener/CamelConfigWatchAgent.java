@@ -42,9 +42,15 @@ public class CamelConfigWatchAgent {
     private ExecutorService pool = Executors.newFixedThreadPool(10);
     private int eventCount = 0;
 
+    /**
+     * Start watching the specified directory for file modifications, adding new files, etc
+     * @param path Path for the directory to start watching
+     * @param gatewayNettyInitializer gatewayNettyInitializer
+     * @throws Exception
+     */
     public void startWatchingForModifications(Path path, GatewayNettyInitializer gatewayNettyInitializer)
             throws Exception {
-        log.info("Watching path : " + path.toString());
+        log.info("Start watching directory [Path: " + path.toString() + "]");
         try {
             Future<Integer> future = pool.submit(() -> {
                 try {
@@ -62,7 +68,7 @@ public class CamelConfigWatchAgent {
                     path.register(service, ENTRY_MODIFY, ENTRY_CREATE);
                     WatchKey key;
                     while (true) {
-                        log.info("Watch service run...... ");
+                        log.info("Watch service running ...");
                         key = service.take();
                         WatchEvent.Kind<?> kind;
 
@@ -72,7 +78,7 @@ public class CamelConfigWatchAgent {
                             if (OVERFLOW == kind) {
                                 continue;
                             } else if (ENTRY_MODIFY == kind) {
-                                log.info("File modification detected.");
+                                log.info("File modification Event Fired!");
                                 if (eventCount > 0) {
                                     eventCount = 0;
                                     continue;
@@ -83,7 +89,7 @@ public class CamelConfigWatchAgent {
                                             &&  !newPath.toString().startsWith(".swp")) {
                                         File modifiedFile = new File(path.toString() + File.separator +
                                                 newPath.toString());
-                                        gatewayNettyInitializer.notifyRoutesModification(modifiedFile);
+                                        gatewayNettyInitializer.addRoutesFromCustomConfigs(modifiedFile);
                                     }
                                 }
                             } else if (ENTRY_CREATE == kind) {
@@ -96,7 +102,7 @@ public class CamelConfigWatchAgent {
                                  * Using eventCount this has been solved for the time being
                                  */
 
-                                log.info("New File creation Detected");
+                                log.info("New File creation Event Fired!");
                                 eventCount++;
                                 @SuppressWarnings("unchecked")
                                 Path newPath = ((WatchEvent<Path>) watchEvent).context();
@@ -104,7 +110,7 @@ public class CamelConfigWatchAgent {
                                         &&  !newPath.toString().startsWith(".swp")) {
                                     File modifiedFile = new File(path.toString() + File.separator +
                                             newPath.toString());
-                                    gatewayNettyInitializer.notifyRoutesModification(modifiedFile);
+                                    gatewayNettyInitializer.addRoutesFromCustomConfigs(modifiedFile);
                                 }
                             }
                         }
@@ -116,7 +122,7 @@ public class CamelConfigWatchAgent {
                 }
             });
             if (future == null) {
-                log.error("Camel config watcher has failed.!");
+                log.error("Camel config watcher has failed!");
             }
         } catch (Exception e) {
             throw e;
